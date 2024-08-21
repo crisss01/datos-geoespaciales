@@ -1,0 +1,267 @@
+#!/bin/bash
+
+for x in {001..027}
+
+do
+
+name="figura$x" #nombre archivo de salida
+region=-75/-70/-39/-35 #region mapa, desde santiago de chile hasta aproximadamente concepcion
+j=M12 #proyección cartográfica mercator de 12 cm
+paleta="mby.cpt" # paleta seleccionada para topografia
+# http://soliton.vm.bytemark.co.uk/pub/cpt-city/mby/tn/mby.png.index.html
+# COLOR_MODEL = RGB
+#-8000   0   0	80      -6000   0   30  100
+#-6000   0   30  100     -4000   0   50  102
+#-4000   0   50  102     -2500   19  108 160
+#-2500	19  108 160	-150    24  140 205
+#-150	24  140 205	-50     135 206 250
+#-50     135 206 250     -10     176 226	255
+#-10	176 226	255	0	0   97	71
+#0       0   97	71      50	16  123	48
+#50	16  123	48	500	232 214	125
+#500	232 214	125	1200	163 68  0
+#1200	163 68  0	1800	130 30 	30
+#1800	130 30  30	2800	161 161 161
+#2800	161 161 161	4000	206 206	206
+#4000	206 206 206	5000	255 255	255
+#B	-
+#F	-
+#N	128	128	128
+sudamerica="-84/-33/-60/13" # límites geográficos región focalizada en Sudamérica
+jc="-59/-19/0.8i" # tamaño de la ventana de la región focalizada en Sudamérica (proyeccion) lon/lat/tamañopulgadas
+axs=a1f1 # intervalo entre ejes y grilla (ejes se dibujarán en la parte inferior y en el lado izquierdo del gráfico/mapa)
+
+
+#-------------------------------------------
+
+## 3) MAPA BASE
+
+gmt psbasemap -R${region} -J${j} -B${axs} -X3.5 -Yc -P -K > ${name}.ps 
+ 
+
+# 'gmt basemap': se generan mapas base y se guarda en archivos ${name}.ps
+
+# '-R$': Define region geografica 
+
+# '-J$': proyección que se utilizará para el mapa
+
+# '-B$': configura los ejes en el mapa, incluyendo las etiquetas, divisiones y marcas.
+
+# '-X3.5 -Yc': ajustan la posición del mapa. -X mueve mapa horizontalmente, -Y verticalmente. 
+# 3.5 desplazamiento horizontal de 3.5 centímetros, y -Yc centra el mapa verticalmente en la página.
+
+# '-P': Gráfica en modo retrato (portrait), se espera que el mapa se distribuya en una página vertical.
+# '-K': Indica que gráficos que se superpondrán en la misma página y mantiene el archivo abierto.
+# El siguiente comando que genere una figura debe tener la opción -O para finalizar la superposición.
+
+#-------------------------------------------
+
+# 5) DESCARGA TOPOGRAFIA 
+
+# datos geoespaciales en forma de malla regular.
+
+# Se descarga topografia de pagina: https://www.gmrt.org/GMRTMapTool/
+
+# se eligio la maxima resolucion en formato ".grd" para trabajar con gmt 
+
+# GMRTv4_1_1_20230813topo.grd
+
+# Para ver informacion sobre esta nueva grilla
+
+# gmt grdinfo -F GMRTv4_1_1_20230813topo.grd
+
+# con esta info, podemos saber como ajustar valores de la paleta de colores para que se vea bien 
+# en diferentes alturas y coordenadas
+
+# ahora con gmt grdimage se toma esta grilla y se genera una imagen visualizada 
+# con una paleta de colores específica. 
+
+# La imagen se coloca en el mapa base con la región, proyección y ejes especificados.
+
+# gmt grdimage GMRTv4_1_1_20230815topo.grd -C${paleta} -R${region} -J${j} -B${axs} -O -K >> ${name}.ps
+
+# se mantiene comentado ya que solo se uso una vez
+
+
+#-------------------------------------------
+# 11) ILUMINACION DE LOS DATOS DE TOPOGRAFIA/BATIMETRIA
+
+# Se iluminan los datos de topografia para generar una gradiente de sombreado, con 'grdgradient' 
+
+# Esto le da un aspecto mucho mas realista al mapa resaltando las variaciones de pendiente. 
+
+gmt grdgradient GMRTv4_1_1_20230815topo.grd -Nt1 -A360 -Glum.int #se crea archivo "lum.int"  
+
+# '-N': nos indica la direccion en que se calcula el gradiente (en este caso se calculará en función de la elevación del terreno) 
+# '-A': angulo de sombra de 0 a 360 (iluminacion uniforme desde todas las direcciones).
+
+# se genera una imagen aplicando la gradiente de sombreado:
+
+gmt grdimage GMRTv4_1_1_20230815topo.grd  -Ilum.int -C${paleta} -R${region} -J${j} -O -K >> ${name}.ps
+
+#-------------------------------------------
+
+# 6) PALETA DE COLORES
+
+gmt psscale -R${region} -J${j} -D13.8c/3c/6c/0.5c  -C${paleta} -Ba2000f500:"Elevation (m)": -O -K >> ${name}.ps
+
+# '-D': posición y dimensiones de la barra de escala. (disthorizontal/distvertical/ancho/largo) 
+# *si se agrega 'h' al final, la barra queda horizontal
+# '-Ba2000': separación entre las etiquetas mayores en la barra de escala
+# 'f500': separación entre las etiquetas menores en la barra de escala
+
+# para modificar paleta de forma manual 
+# gmt makecpt -Cpaleta_entrada.cpt -Tz_min/z_max/paso > paleta_salida.cpt
+
+#-------------------------------------------
+
+# 4) GRAFICAR LINEA COSTERA
+
+gmt pscoast -R${region} -J${j} -B${axs} -Di -N1/0.7p,128 -W0.5p,0/0/0 -Lf-72.5/-38.7/-38/100 -Tf-72/-35.5/1/2  --HEADER_FONT_SIZE=7 -O -K  >> ${name}.ps
+
+
+# Se pueden agregar rios con -I(1 a 10 para especificar detalle de estos)
+
+
+#-------------------------------------------
+
+# 9) CIUDADES EN EL MAPA
+
+echo -72.59 -38.6 "km" | gmt pstext -R${region}  -J${j} -V -F+f9p,Helvetica-Bold,black+jLM -O -K >> ${name}.ps
+
+# se inserta la palabra 'km' en la escala
+
+# 'echo longitud latitud | gmt psxy' para plotear figuras 
+# '-S': indica tipo de figura (c=circle), espesor de 0.2 cm
+# '-W': Grosor contorno figura y color. 
+# '-G': Color circulo.
+
+# se plotean circulos por cada ciudad mencionada aqui:
+
+# se inscribe un texto con el nombre de la ciudad 
+# con gmt pstext se elige el tipo de letra (Helvetica-Bold)
+# con f7p, el tamaño de fuente 
+# '-Gcolor(R/G/B)' para poner fondo en el texto
+
+
+
+     echo -72.94 -36.82 "Concepci\363n" | gmt pstext -R${r} -J${j} -P -V -F+f10p,Helvetica-Bold,black+jLM -Gwhite -O -K >> ${name}.ps
+     echo "-73.04 -36.82" | gmt psxy -R${r} -J${j} -Sc0.4C -W0.5p,0 -Gyellow -O -K >> ${name}.ps #punto concepcion
+
+
+
+     echo -72.96 -37.17 "Santa Juana" | gmt pstext -R${r} -J${j} -P -V -F+f10p,Helvetica-Bold,black+jLM -Gwhite -O -K >> ${name}.ps
+     echo "-73.06 -37.17" | gmt psxy -R${r} -J${j} -Sc0.4C -W0.5p,0 -Gyellow -O -K >> ${name}.ps #punto los angeles
+
+
+
+     echo -72.00 -36.60 "Chill\341n" | gmt pstext -R${r} -J${j} -P -V -F+f10p,Helvetica-Bold,black+jLM -Gwhite -O -K >> ${name}.ps
+     echo "-72.10 -36.60" | gmt psxy -R${r} -J${j} -Sc0.4C -W0.5p,0 -Gyellow -O -K >> ${name}.ps #punto chillan
+	 
+	 #-------------------------------------------
+
+# 7) FOCOS DE INCENDIO
+
+# Se plotearan puntos de brillo maximo para los dias del 01 al 27 de febrero, siguiendo el ciclo.
+
+# Para hacer una paleta acorde a los focos de incendio -> gmt makecpt -Ccolor_palette.cpt -T290/360/1 > focos.cpt
+# limites de 290 a 360 K
+
+gmt psxy dia$x.txt -R${region} -J${j} -Ss0.15 -W0.1p -Cfocos.cpt -O -K >> ${name}.ps
+# -Ss0.15 para tamaño cuadrado aproximado (sacado al ojo)
+
+# '-S': Especifica el símbolo utilizado para representar los puntos (square).
+# '-W0.1': Grosor bordes de símbolos 
+# '-C': Aplica una paleta de colores a los puntos.
+
+# ESCALA FOCOS INCENDIO
+
+gmt psscale -Dx6c/-1c/8c/0.5ch -Cfocos.cpt -Ba20f5:"Bright (K)/ Temp": -O -K >> ${name}.ps
+#gmt psscale -R${region} -J${j} -D1.1c/1.7c/3c/0.3c -Cfocos.cpt -Ba20f5/a20f5:"Bright (K)/ temp": -O -K >> ${name}.ps
+# -D, define la ubicación y el tamaño de la barra de escala
+# x8c/-1c, especifica la posición horizontal y vertical de la barra de escala (desplazamiento en las unidades de la proyección, en este caso, centímetros).
+# 8c, define el ancho de la barra de escala.
+# 0.5ch, establece la altura de la barra de escala en función del tamaño de la fuente actual.
+# a20f5 establece la posición y el espaciado de las etiquetas.
+
+
+
+#------------------------------------------------------------------------------
+
+# 15) TEXTO QUE MENCIONE DIA(HORA) CORRESPONDIENTE
+
+echo "-73.9 -35.3 ${x} - 02 - 2023" | gmt pstext -R${region} -JM12 -P -V -F+f13p,Helvetica-Bold,black+jLM -Gwhite -O -K >> ${name}.ps
+# +f20p: Establece el tamaño de fuente en 20 puntos.
+# se plotea la fecha en cada imagen 
+# '-Gwhite': fondo blanco.
+
+#-----------------
+# VECTORES DE VIENTO
+# los datos fueron descargados de agrometeorologia.cl en formato .csv y tratados con chatgpt para eliminar las columnas que no usaremos de la matriz
+# se multiplico cada velocidad por 0.25 para ajustar los vectores a un tamaño razonable al mapa (numero arbitrario)
+# se dejaron solo las columnas de velocidad y direccion
+# las estaciones son las siguientes
+
+canete=$(awk "NR == $x" cañete.txt) 
+lacolonia=$(awk "NR == $x" lacolonia.txt)
+tirua=$(awk "NR == $x" tirua.txt)
+yungay=$(awk "NR == $x" yungay.txt)
+tome=$(awk "NR == $x" tome.txt)
+
+# awk lee la línea específica con el número de línea $x del archivo ----.txt y la almacena en la variable 
+
+echo -73.44 -37.75 "$canete" | gmt psxy -R${region} -J${j} -Sv0.06c/0.15c/0.08c  -Gwhite -O -K>> ${name}.ps
+echo -72.59 -37.28 "$lacolonia" | gmt psxy -R${region} -J${j} -Sv0.06c/0.15c/0.08c  -Gwhite -O -K>> ${name}.ps
+echo -73.49 -38.27 "$tirua" | gmt psxy -R${region} -J${j} -Sv0.06c/0.15c/0.08c  -Gwhite -O -K>> ${name}.ps
+echo -72.01 -37.14 "$yungay" | gmt psxy -R${region} -J${j} -Sv0.06c/0.15c/0.08c  -Gwhite -O -K>> ${name}.ps
+echo -72.96 -36.67 "$tome" | gmt psxy -R${region} -J${j} -Sv0.06c/0.15c/0.08c  -Gwhite -O -K>> ${name}.ps
+
+# -Sv0.06c/0.15c/0.08c: Esta opción define el símbolo que se utilizará para representar los datos.
+#  En este caso, se está utilizando un vector (v) con una longitud y ancho específicos, dados en centímetros (c).
+#-----------------
+
+# 12) INSERTAR MAPA
+
+#  comando para indicar zona de estudio arriba del mini mapa
+
+echo -74.86 -35.23 "Study Zone" | gmt pstext -R${region}  -J${j} -P -V -F+f10p,Helvetica-Bold,white+jLM -Gblack -O -K >> ${name}.ps
+
+# se selecciona sudamerica como region a plotear y su proyeccion (en las variables: 'sudamerica')
+
+gmt pscoast -R${sudamerica} -JC${jc} -Bg6 -Di -X+0.2 -Y7.5 -A12 -W0.25p -G255/187/86 -O -K >> ${name}.ps
+
+# '-JC${jc}': Establece la proyección utilizada en el mapa.
+# 'Bg6': Agrega una cuadrícula de coordenadas cada 6 grados.
+# '-X e -Y': localiza minimapa dentro del principal. 
+# '-W': Establece el grosor de las líneas de la capa de costa en 0.25 puntos.
+# '-G': Establece relleno color continente. 
+ 
+
+# se inserta mini cuadrado en la proyeccion para tener mejor nocion de la zona de estudio (region del bío-bío)
+
+echo ${region} | sed 's/\// /g' | awk '{printf"%s %s\n %s %s\n %s %s\n %s %s\n %s %s\n", $1, $3, $2, $3, $2, $4, $1, $4, $1, $3}'| gmt psxy -R${sudamerica} -JC${jc} -W0.7p -A100 -O >> ${name}.ps
+
+# ' sed 's/\// /g' ': reemplaza todas las "/" por espacios en blanco para separar los valores.
+
+# "%s %s\n %s %s\n %s %s\n %s %s\n %s %s\n"  formatea los valores transformados para definir un polígono (rectangulo). 
+
+# Las coordenadas de salida seran: lon_min lat_min, lon_max lat_min, lon_max lat_max, lon_min lat_max 
+# finalmente lon_min lat_min, cerrando asi el rectangulo.
+
+gmt psconvert ${name}.ps -A+bwhite -Tj -P -Qg2 -E600 -F${name}
+
+# +bwhite, indica que se debe agregar un fondo blanco detrás de la imagen convertida.
+# -Qg2: Esta opción controla la calidad de la imagen en formato PNG. g2 se refiere a una compresión de imagen intermedia.
+# -E600: Esto define la resolución de la imagen de salida en puntos por pulgada (PPI). En este caso, la imagen tendrá una resolución de 600 PPI.
+# Tj: para generar imagenes .jpg
+
+done
+
+#SE CONVIERTE A GIF
+#convert -delay 50 -loop 1 figura*.png incendiosbiobio.gif
+
+# para crear el gif tuve que convertir las imagenes a jpg, ya que estas ultimas pesan menos.
+# si no hacia esto, la consola me arrojaba error debido al tamaño de las png.
+
+
+
